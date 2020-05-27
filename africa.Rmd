@@ -1,0 +1,509 @@
+---
+title: "Aiding Africa: Disaster & Disease Relief Plan"
+author: "Thinh Mai & Free Burton"
+date: "05/17/2020"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+    toc: TRUE
+---
+
+```{r include = FALSE}
+## Course: 5260 Mathematical Models
+## Purpose: Aiding AfricaL Disaster and Disease Relief Plan
+## Date: May 17, 2020
+## Authors: Thinh Mai and Free Burton
+
+```
+
+```{r message = FALSE, echo = FALSE, include = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE))
+
+# Clear environment of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep = ""), detach, character.only = TRUE, unload = TRUE)
+
+```
+
+
+# Load Libraries 
+```{r message = FALSE}
+library(lpSolveAPI)
+library(tidyr)
+library(dplyr)
+library(knitr)
+library(prettydoc)
+library(kableExtra)
+library(tidyverse)
+
+```
+
+
+# Load and Transform Data
+```{r message = FALSE}
+df <- read.csv("africa_data.csv",skip = 1)
+
+```
+
+## Creating seperate dataframes
+```{r message = FALSE, warning = FALSE}
+ #transport characteristics (trans)
+transp <- df %>%
+select(1:3) %>%
+remove_missing()
+
+# african destinations (dest)
+dest <- df %>%
+select(5:6) %>%
+remove_missing()
+
+# city transport pairs (dist_cost)
+dist_cost <- df %>%
+select(8:12) %>%
+remove_missing()
+
+# air_restrictions (aid_req)
+aid_req <- df%>%
+select(14:15) %>%
+remove_missing()
+
+# aid restrictions (air_res)
+air_restr <- df %>%
+select(17:19) %>%
+remove_missing()
+
+# truck restrictions (truck_rest)
+truck_restr <- df %>%
+select(21:23) %>%
+remove_missing()
+
+```
+
+
+# Network Map 
+
++ Code a “network map” showing the different routes workers and supplies may take to reach the African cities from the United States.  
+
+```{r figure1, echo=FALSE, out.width = '100%'}
+# diagram of the problem
+knitr::include_graphics("figure1.png")
+
+```
+
++ 6 first-leg cities and 3 second-leg cities (final destinations)
+
+
+# Plan 1: Fastest Route with no Constraints
+
++ Given the distance (Table 3) and the speed of the transportation used (Table 1) between each pair of cities, how can Gail McGovern and the IFRC most quickly move workers from the United States to each of the nine IFRC cities? How long will it take workers and supplies to reach each city using the quickest route? Which routes appear to have significant time bottlenecks that the IFRC should work to reduce? Provide a table and/or network map indicating the quickest route and travel time between the United States and African cities on the network. 
+
+```{r message = FALSE}
+# calculate time from distance and speed
+dist_cost$Duration <- ifelse(dist_cost$Type.1 == "Airplane",dist_cost$Distance/400,ifelse(dist_cost$Type.1 == "Ship",dist_cost$Distance/35,dist_cost$Distance/50))
+                             
+# time (hours) used for our objective function
+round(dist_cost$Duration,digits = 2)
+
+```
+
+```{r message = FALSE}
+# create no restraints problem
+first_plan <- make.lp(0,30)
+
+obj_fn <- dist_cost$Duration
+set.objfn(first_plan, obj_fn)
+
+```
+
+```{r}
+# departure from United States to each of the 9 IRFC cities
+add.constraint(first_plan,c(1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),"=",1) # to Lusaka,Zambia
+add.constraint(first_plan,c(0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),"=",1) # to Libreville, Gabon
+add.constraint(first_plan,c(0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),"=",1) # to Nairobi, Kenya
+add.constraint(first_plan,c(0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),"=",1) # to Khartoum, Sudan
+add.constraint(first_plan,c(0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),"=",1) # to Luanda, Angola 
+add.constraint(first_plan,c(0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),"=",1) # to Dakar, Senegal
+
+# final three destinations
+add.constraint(first_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0,0,0,0,0,0,0),"=",-1) # Niamey, Niger
+add.constraint(first_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,0,0,0,0,0,0),"=",-1) # Kosongo, D.R. Congo
+add.constraint(first_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1),"=",-1) # Ndjamena, Chad
+
+solve(first_plan)
+get.objective(first_plan)
+get.variables(first_plan)
+
+```
+
++ For our 6 first-leg cities, we can cover them within the range of 24 hours to almost 8 days
+
+    - from New York, NY to Khartoum, Sudan: 17.6 hours
+    - from Jasonville, FL to Lusaka, Zambia: 19.86 hours 
+    - from Jacksonville, FL to Nairobi, Kenya: 19.9 hours
+    - from New York, NY to Libreville, Gabon: 7.17 days
+    - from New York, NY to Luanda, Angola: 7.77 days
+    - from Jacksonville, FL to Dakar, Senegal: 4.67 days
+    
++ For our 3 second-leg (final destinations) cities, we expect to reach them within just a few hours
+  
+    - from Khartoum, Sudan to Niamey, Niger: 5.16 hours
+    - from Lusaka, Zambia to Kosongo, D.R. Congo: 1.87 hours
+    - from Khartoum, Sudan to Ndjamena, Chad: 3 hours 
+  
++ The quickest route takes 538.07 hours to reach all nine cities
+
+## Summary table
+```{r q2, echo=FALSE, out.width = '100%'}
+# build table to make understanding results easier
+obj_fn1 <- dist_cost$Duration
+ps1 <- get.primal.solution(first_plan)
+obj_sa1 <- get.sensitivity.obj(first_plan)
+rhs_sa1 <- get.sensitivity.rhs(first_plan)
+
+# table dimensions
+n1 <- length(get.variables(first_plan))
+m1 <- length(get.constr.type(first_plan))
+
+# make output and table
+ov1 <- paste0("Objective function value = ", ps1[1])
+sa_tab1 <- rbind(ps1[2:(n1 + m1 + 1)], 
+                c(round(rhs_sa1$duals[1:m1], 2), obj_fn1),
+                round(c(rhs_sa1$dualsfrom[1:m1],obj_sa1$objfrom), 2),
+                round(c(rhs_sa1$dualstill[1:m1],obj_sa1$objtill), 2)) 
+colnames(sa_tab1) <- c(rownames(first_plan), colnames(first_plan))
+rownames(sa_tab1) <- c("Solution", "Duals/Coef", "Sens From", "Sens Till")      
+
+# substitute "inf" and "-inf" so tables are easier to read (coded by two classmates!)
+sa_tab1 <- ifelse(sa_tab1 == -1.000e+30, "-inf", sa_tab1)
+sa_tab1 <- ifelse(sa_tab1 == 1.000e+30, "inf", sa_tab1)
+
+# print the table
+kable(sa_tab1, format.args = list(big.mark = ",")) %>%
+  kable_styling(bootstrap_options = c("striped", "bordered")) %>% 
+  add_footnote(label = ov1, notation = "none")
+
+```
+
++ Khartoum, Sudan is a potential bottomneck
+  
+    - plays as a main transit 
+    - slight delay in Khartoum could lead to other delays to Niamey and Ndjamena 
+    
++ The highest dual values come from R2(172.11) and R5(186.46)
+
+    - loosening these constraints would have the most benefit and they are potential bottlenecks
+    - these are routes to Libreville, Gabon (R2) and to Luanda, Angola (R5) from the US
+
+## Network diagram
+```{r figure2, echo=FALSE, out.width = '100%'}
+# diagram of the problem
+knitr::include_graphics("figure2.png")
+
+```
+
+
+# Plan 2: Minimum Cost 
+
++ Given the distance (Table 3) and the speed of the transportation used (Table 1) between each pair of cities, how can Gail McGovern and the IFRC most quickly move workers from the United States to each of the nine IFRC cities? How long will it take workers and supplies to reach each city using the quickest route? Which routes appear to have significant time bottlenecks that the IFRC should work to reduce? Provide a table and/or network map indicating the quickest route and travel time between the United States and African cities on the network. 
+
+```{r message = FALSE}
+# create cost minimization 
+second_plan <- make.lp(0,30)
+
+fcn <- dist_cost$Cost
+set.objfn(second_plan, fcn)
+
+```
+
+```{r message = FALSE}
+# cargo available
+add.constraint(second_plan,c(-150, -240, -150, -150, -240, -240,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "=", -500000) # New York
+add.constraint(second_plan,c(0,0,0,0,0,0, -150, -240, -150, -150, -240, -240,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "=", -500000) # Jacksonville
+
+# departure from United States
+add.constraint(second_plan,c(150,0,0,0,0,0,150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0),"=",150000) # to Lusaka, Zambia
+add.constraint(second_plan,c(0,240,0,0,0,0,0,240,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0),"=",100000) # to Libreville, Gabon
+add.constraint(second_plan,c(0,0,150,0,0,0,0,0,150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0),"=",120000) # to Nairobi, Kenya
+add.constraint(second_plan,c(0,0,0,150,0,0,0,0,0,150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0),"=", 90000) # to Khartoum, Sudan
+add.constraint(second_plan,c(0,0,0,0,240,0,0,0,0,0,240,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0),"=",130000) # to Luanda, Angola 
+add.constraint(second_plan,c(0,0,0,0,0,240,0,0,0,0,0,240,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7),"=",50000)  # to Dakar, Senegal
+
+# final three destinations  
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,150,17.7,150,150,17.7,17.7,0,0,0,0,0,0,0,0,0,0,0,0),"=", 100000) # Niamey, Niger
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,150,17.7,150,150,17.7,17.7,0,0,0,0,0,0),"=", 180000) # Kosongo, D.R. Congo
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,150,17.7,150,150,17.7,17.7),"=", 80000)  # Ndjamena, Chad
+
+# trucks available
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0), "<=", 840) # libreville to ndjamena
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0), "<=", 840) # luanda to ndjamena
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1), "<=", 840) # dakar to ndjamena
+
+# flights available
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0), "<=", 200) # lusaka to ndjamena
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0), "<=", 200) # khartoum to ndjamena 
+
+# airplanes only to Niamey, Niger
+add.constraint(second_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0), "<=", 0) 
+
+solve(second_plan)
+get.objective(second_plan)
+get.variables(second_plan)
+
+```
+
++ Round the results to the nearest interger 
+
++ The minimum cost is $310,861,300.
+
++ After rounding the minimum cost is $310,869.00
+
++ We cover the 6 first-leg cities with a total of 3568 trips:
+  
+    - 3600 airplane trips
+    - 1917 trips via ship
+    - there are not any trips via trucks
+
++ For our 3 destinations, we cover 11369 trips through  1200 trips by airplanes and 10169 trips through trucks 
+
++ Our total capacity of nine cities is $1,360,071 which meets the requirement of the minimum aid (one million)
+
++ Trips details:
+  
+    - from New York, NY to Lusaka, Zambia: 267 airplanes
+    - from New York, NY to Libreville,Gabon: 1167 ships
+    - from New York, NY to Luanda, Angola: 542 ships 
+    - from New York, NY to Dakar, Senegal: 208 ships
+    - from Jacksonville, FL to Lusaka, Zambia: 733 airplanes
+    - from Jacksonville, FL to Nairobi, Kenya: 1133 airplanes
+    - from Jacksonville, FL to Khartoum, Sundan: 1467 airplanes
+    - from Khartoum, Sudan to Niamey, Niger: 667 airplanes
+    - from Libreville, Gabon to Kosongo, D.R.Congo: 10169 trucks
+    - from Nairobi, Kenya to Ndjamena, Chad: 333 airplanes
+    - from Khartoum, Sudan to Ndjamena, Chad: 200 airplanes
+
++ Khartoum is an important transit here, from here it will distribute aids to 2 cities which are Niamey, Niger and Ndjamena, Chad
+
+## Summary table
+```{r p1_b, echo=FALSE, out.width = '100%'}
+# build table to make understanding results easier
+obj_fn2 <- dist_cost$Cost
+ps2 <- get.primal.solution(second_plan)
+obj_sa2 <- get.sensitivity.obj(second_plan)
+rhs_sa2 <- get.sensitivity.rhs(second_plan)
+
+# table dimensions
+n2 <- length(get.variables(second_plan))
+m2 <- length(get.constr.type(second_plan))
+
+# make output and table
+ov2 <- paste0("Objective function value = ", ps2[1])
+sa_tab2 <- rbind(ps2[2:(n2 + m2 + 1)], 
+                c(round(rhs_sa2$duals[1:m2], 2), obj_fn2),
+                round(c(rhs_sa2$dualsfrom[1:m2],obj_sa2$objfrom), 2),
+                round(c(rhs_sa2$dualstill[1:m2],obj_sa2$objtill), 2)) 
+colnames(sa_tab2) <- c(rownames(second_plan), colnames(second_plan))
+rownames(sa_tab2) <- c("Solution", "Duals/Coef", "Sens From", "Sens Till")      
+
+# substitute "inf" and "-inf" so tables are easier to read (coded by two classmates!)
+sa_tab2 <- ifelse(sa_tab2 == -1.000e+30, "-inf", sa_tab2)
+sa_tab2 <- ifelse(sa_tab2 == 1.000e+30, "inf", sa_tab2)
+
+# print the table
+kable(sa_tab2, format.args = list(big.mark = ",")) %>%
+  kable_styling(bootstrap_options = c("striped", "bordered")) %>% 
+  add_footnote(label = ov2, notation = "none")
+
+```
+
++ R1(-0.37) and R2(-0.42) give the lowest dual values
+
+    - this means these constraints would have the most effect on reducing costs and are potential bottlenecks
+    - we would benefit the most from loosening the constraints of having to use all 500k supply from New York and Jacksonville
+
+## Network diagram
+```{r figure3, echo=FALSE, out.width = '100%'}
+# diagram of the problem
+knitr::include_graphics("figure3.png")
+
+```
+
+
+# Plan 3: Transport Constraints
+
++ Assign the capacity based on transport type for each route
+
+```{r message = FALSE}
+# create cargo maximization problem 
+third_plan <- make.lp(0,30)
+lp.control(third_plan, sense = "max")
+
+obj_fn3 <- c(150, 240, 150, 150, 240, 240, 150, 240, 150, 150, 240, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+set.objfn(third_plan, obj_fn3)
+
+```
+
+```{r message = FALSE}
+# cargo available
+add.constraint(third_plan,c(-150,-240,-150,-150,-240,-240,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), ">=", -500000) # New York
+add.constraint(third_plan,c(0,0,0,0,0,0,-150,-240,-150,-150,-240,-240,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), ">=", -500000) # Jacksonville
+
+# departure from United States
+add.constraint(third_plan,c(150,0,0,0,0,0,150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0),"<=",150000) # to Lusaka, Zambia
+add.constraint(third_plan,c(0,240,0,0,0,0,0,240,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0),"<=",100000) # to Libreville, Gabon
+add.constraint(third_plan,c(0,0,150,0,0,0,0,0,150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0),"<=",120000) # to Nairobi, Kenya
+add.constraint(third_plan,c(0,0,0,150,0,0,0,0,0,150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0,0,0,0,-150,0,0),"<=", 90000) # to Khartoum, Sudan
+add.constraint(third_plan,c(0,0,0,0,240,0,0,0,0,0,240,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0),"<=",130000) # to Luanda, Angola 
+add.constraint(third_plan,c(0,0,0,0,0,240,0,0,0,0,0,240,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7,0,0,0,0,0,-17.7),"<=",50000)  # to Dakar, Senegal
+
+# final three destinations  
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,150,17.7,150,150,17.7,17.7,0,0,0,0,0,0,0,0,0,0,0,0),"<=", 100000) # Niamey, Niger
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,150,17.7,150,150,17.7,17.7,0,0,0,0,0,0),"<=", 180000) # Kosongo, D.R. Congo
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,150,17.7,150,150,17.7,17.7),"<=", 80000)  # Ndjamena, Chad
+
+# new york air restrictions
+add.constraint(third_plan,c(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",300) # to Lusaka, Zambia 
+add.constraint(third_plan,c(0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",500) # to Nairobi, Kenya 
+add.constraint(third_plan,c(0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",500) # to Khartoum, Sudan 
+
+# jacksonville air restrictions
+add.constraint(third_plan,c(0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",500) # to Lusaka, Zambia
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",700) # to Nairobi, Kenya 
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",600) # to Khartoum, Sudan 
+
+# africa restrictions (to Niamey, Niger)
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",300) # Kha
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",200) # Lus
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0), "<=",0)   # Nai
+
+# africa restrictions (to Kosongo, D.R. Congo)
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0), "<=",80)  # Kha
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0), "<=",140) # Lus
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0), "<=",40)  # Nai
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0), "<=",700) # Dak
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0), "<=",300) # Lib
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0), "<=",250) # Lua
+
+# africa Restrictions (to Ndjamena, Chad)
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0), "<=",40)  # Kha
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0), "<=",0)   # Lus
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0), "<=",300) # Nai
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0), "<=",160) # Lib
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0), "<=",240) # Lua
+add.constraint(third_plan,c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1), "<=",450) # Dak
+
+solve(third_plan)
+get.variables(third_plan)
+get.objective(third_plan)
+
+```
+
++ The maximum total aid provided is 816,170 tons to all cities 
+
+    - this is a better than expected outcome considering 1 million is the total aid required
+
++ The amount of aid each city gets (tons)
+
+    - from New York, NY to Lusaka, Zambia: 45,000 
+    - from New York, NY to Libreville, Gabon: 116,880
+    - from New York, NY to Nairobi, Kenya:66,000
+    - from New York, NY to Khartoum, Sudan: 63,000
+    - from New York, NY to Luanda, Angola:138,720
+    - from New York, NY to Dakar, Senegal: 70,320
+    - from Jacksonville, FL to Lusaka, Zambia: 75,000
+    - from Jacksonville, FL to Libreville, Gabon: 46,080
+    - from Jacksonville, FL to Nairobi, Kenya: 105,000
+    - from Jacksonville, FL to Khartoum, Sudan: 90,000
+    - from Libreville, Gabon to Niamey, Niger: 54,993.90
+    - from Khartoum, Sudan to Niamey, Niger: 45,000
+    - from Libreville, Gabon to Kosongo, D.R. Congo: 5,310
+    - from Nairobi, Kenya to Kosongo, D.R. Congo: 6,000
+    - from Khartoum, Sudan to Kosongo, D.R. Congo:12,000
+    - from Luanda, Angola to Kosongo, D.R. Congo: 4,425
+    - from Dakar, Senegal to Kosongo, D.R. Congo: 12,390
+    - from Libreville, Gabon to Ndjamena, Chad: 2,832
+    - from Nairobi, Kenya to Ndjamena, Chad: 45,000
+    - from Khartoum, Sudan to Ndjamena, Chad: 6,000
+    - from Luanda, Angola to Ndjamena, Chad: 4,248
+    - from Dakar, Senegal to Ndjamena, Chad: 7,965
+    
+    
++ Trip details: 
+
+    - from New York, NY to Lusaka, Zambia: 300 airplanes 
+    - from New York, NY to Libreville, Gabon: 487 ships 
+    - from New York, NY to Nairobi, Kenya: 440 airplanes
+    - from New York, NY to Khartoum, Sudan: 420 airplanes 
+    - from New York, NY to Luanda, Angola: 578 ships 
+    - from New York, NY to Dakar, Senegal: 293 ships 
+    - from Jacksonville, FL to Lusaka, Zambia: 500 airplanes
+    - from Jacksonville, FL to Libreville, Gabon: 192 ships 
+    - from Jacksonville, FL to Nairobi, Kenya: 700 airplanes
+    - from Jacksonville, FL to Khartoum, Sudan: 600 airplanes
+    - from Libreville, Gabon to Niamey, Niger: 3107 trucks
+    - from Khartoum, Sudan to Niamey, Niger: 300 airplanes
+    - from Libreville, Gabon to Kosongo, D.R. Congo: 300 trucks
+    - from Nairobi, Kenya to Kosongo, D.R. Congo: 40 airplanes
+    - from Khartoum, Sudan to Kosongo, D.R. Congo: 80 airplanes
+    - from Luanda, Angola to Kosongo, D.R. Congo: 250 trucks 
+    - from Dakar, Senegal to Kosongo, D.R. Congo: 700 trucks
+    - from Libreville, Gabon to Ndjamena, Chad: 160 trucks
+    - from Nairobi, Kenya to Ndjamena, Chad: 300 airplanes
+    - from Khartoum, Sudan to Ndjamena, Chad: 40 airplanes
+    - from Luanda, Angola to Ndjamena, Chad: 240 trucks
+    - from Dakar, Senegal to Ndjamena, Chad: 450 trucks
+
+
+
++ There are 7 routes which are not able to deliver any aids (0 tons)
+
++ The total aid arrived in all cities before getting distributed to the 3 final destinations: 1,022,164 (tons)
+
+## Summary table
+```{r message = FALSE}
+# build table to make understanding results easier
+obj_fn3 <- dist_cost$Capacity_On_Type
+ps3 <- get.primal.solution(third_plan)
+obj_sa3 <- get.sensitivity.obj(third_plan)
+rhs_sa3 <- get.sensitivity.rhs(third_plan)
+
+# table dimensions
+n3 <- length(get.variables(third_plan))
+m3 <- length(get.constr.type(third_plan))
+
+# make output and table
+ov3 <- paste0("Objective function value = ", ps3[1])
+sa_tab3 <- rbind(ps3[2:(n3 + m3 + 1)], 
+                c(round(rhs_sa3$duals[1:m3], 2), obj_fn3),
+                round(c(rhs_sa3$dualsfrom[1:m3],obj_sa3$objfrom), 2),
+                round(c(rhs_sa3$dualstill[1:m3],obj_sa3$objtill), 2)) 
+colnames(sa_tab3) <- c(rownames(third_plan), colnames(third_plan))
+rownames(sa_tab3) <- c("Solution", "Duals/Coef", "Sens From", "Sens Till")      
+
+# substitute "inf" and "-inf" so tables are easier to read (coded by two classmates!)
+sa_tab3 <- ifelse(sa_tab3 == -1.000e+30, "-inf", sa_tab3)
+sa_tab3 <- ifelse(sa_tab3 == 1.000e+30, "inf", sa_tab3)
+
+# print the table
+kable(sa_tab3, format.args = list(big.mark = ",")) %>%
+  kable_styling(bootstrap_options = c("striped", "bordered")) %>% 
+  add_footnote(label = ov3, notation = "none")
+
+```
+
++ R12, R15, R21, R23, R27, R29 - all have the highest dual value of 150
+
+    - these all have the most impact on our aid and if we were to loosen our constraints then we can increase the aid we send
+    - we would benefit the most if we could lift these restrictions on travel
+
+## Network diagram
+```{r figure4, echo=FALSE, out.width = '100%'}
+# diagram of the problem
+knitr::include_graphics("figure4.png")
+
+```
+
+
+
+
+
